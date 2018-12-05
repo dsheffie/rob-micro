@@ -50,36 +50,40 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops) {
   //buf[1] = 0x90;
   //buf[2] = 0x90;
 
-  buf[0] = 0x48;
-  buf[1] = 0x89;
-  buf[2] = 0xd0;
-  
+  int offs = 0;
+  buf[offs++] = 0x48;
+  buf[offs++] = 0x89;
+  buf[offs++] = 0xd0;
+  const int lloop = offs;
   //0000000000000003 <lloop>:
-  //3:	48 8b 3f             	mov    (%rdi),%rdi
-  buf[3] = 0x48;
-  buf[4] = 0x8b;
-  buf[5] = 0x3f;
-  /* fill with nops */
-  for(int i = 0; i < num_nops; i++) {
-    buf[6+i] = 0x90;
+  for(int iters = 0; iters < 4; iters++) {
+    //3:	48 8b 3f             	mov    (%rdi),%rdi
+    buf[offs++] = 0x48;
+    buf[offs++] = 0x8b;
+    buf[offs++] = 0x3f;
+    /* fill with nops */
+    for(int i = 0; i < num_nops; i++) {
+      buf[offs++] = 0x90;
+    }
+    //146:	48 8b 36             	mov    (%rsi),%rsi
+    buf[offs++] = 0x48;
+    buf[offs++] = 0x8b;
+    buf[offs++] = 0x36;
+    // 48 ff ca             	dec    %rdx
+    buf[offs++] = 0x48;
+    buf[offs++] = 0xff;
+    buf[offs++] = 0xca;
   }
-  //146:	48 8b 36             	mov    (%rsi),%rsi
-  buf[num_nops+6] = 0x48;
-  buf[num_nops+7] = 0x8b;
-  buf[num_nops+8] = 0x36;
-  // 48 ff ca             	dec    %rdx
-  buf[num_nops+9] = 0x48;
-  buf[num_nops+10] = 0xff;
-  buf[num_nops+11] = 0xca;
   //14c:	0f 85 b1 fe ff ff    	jne    3 <lloop>
-  buf[num_nops+12] = 0x0f;
-  buf[num_nops+13] = 0x85;
-  uu.i32 = 3 - (num_nops+18);
+  int branch_ip = offs;
+  buf[offs++] = 0x0f;
+  buf[offs++] = 0x85;
+  uu.i32 = lloop - (branch_ip+6);
   for(int i = 0; i < 4; i++) {
-    buf[num_nops+14+i] = uu.bytes[i];
+    buf[offs++] = uu.bytes[i];
   }
   //152:	c3                   	retq   
-  buf[num_nops+18] = 0xc3;
+  buf[offs++] = 0xc3;
 
   buf[buflen-1] = 0xc3;
   return reinterpret_cast<ubench_t>(buf);
@@ -147,13 +151,13 @@ int main() {
     int tries = 1;
     avg = avg_time(num_nops,len);
     do {
-      double r = avg_time(num_nops,1L<<23);
+      double r = avg_time(num_nops,1L<<20);
       avg = ((avg * tries) +  r) / (tries+1);
       tries++;
       error = std::abs(avg-r) / avg;
       //std::cout << "avg = " << avg << ",r = " << r << ", error = " << error << "\n";
     }
-    while(error > 0.01 and tries < 16);
+    while(error > 0.01 /*or tries < 16*/);
     std::cout << num_nops << " insns, " << avg << " cycles\n";
   }
 
