@@ -38,7 +38,8 @@ static uint8_t *rawb = nullptr;
 static size_t pgsz = 0;
 static list* head = nullptr, *mid = nullptr;
 
-ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops) {
+ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4) {
+  assert(unroll < 128);
   union {
     int32_t i32;
     uint8_t bytes[4];
@@ -54,9 +55,10 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops) {
   buf[offs++] = 0x48;
   buf[offs++] = 0x89;
   buf[offs++] = 0xd0;
+
   const int lloop = offs;
   //0000000000000003 <lloop>:
-  for(int iters = 0; iters < 4; iters++) {
+  for(int iters = 0; iters < unroll; iters++) {
     //3:	48 8b 3f             	mov    (%rdi),%rdi
     buf[offs++] = 0x48;
     buf[offs++] = 0x8b;
@@ -69,13 +71,27 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops) {
     buf[offs++] = 0x48;
     buf[offs++] = 0x8b;
     buf[offs++] = 0x36;
-    // 48 ff ca             	dec    %rdx
-    buf[offs++] = 0x48;
-    buf[offs++] = 0xff;
-    buf[offs++] = 0xca;
+    /* fill with nops */
+#if 0
+    for(int i = 0; i < num_nops; i++) {
+      buf[offs++] = 0x90;
+    }
+#endif
+    if(iters == 0) {
+      //3 bytes before loop
+      int body_sz  = (offs - lloop);
+      //10 bytes follow loop
+      assert( (lloop + 10 + unroll * body_sz) < pgsz);
+    }
   }
+  //48 83 ea 01          	sub    $0x1,%rdx
+  buf[offs++] = 0x48;
+  buf[offs++] = 0x83;
+  buf[offs++] = 0xea;
+  buf[offs++] = unroll;
+  
   //14c:	0f 85 b1 fe ff ff    	jne    3 <lloop>
-  int branch_ip = offs;
+  const int branch_ip = offs;
   buf[offs++] = 0x0f;
   buf[offs++] = 0x85;
   uu.i32 = lloop - (branch_ip+6);
@@ -93,7 +109,7 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops) {
 
 double avg_time(int num_nops, int64_t iterations) {
 
-  ubench_t my_bench = make_code(rawb, pgsz, num_nops);
+  ubench_t my_bench = make_code(rawb, pgsz, num_nops, 16);
   
   int64_t c = 0;
   cycle_counter cc;
