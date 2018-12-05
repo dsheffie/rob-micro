@@ -1,4 +1,6 @@
 #include <iostream>
+#include <ostream>
+#include <fstream>
 #include <cstdlib>
 #include <cstdio>
 #include <cassert>
@@ -130,6 +132,7 @@ double avg_time(int num_nops, int64_t iterations) {
 
 
 int main() {
+  char hostname[256] = {0};
   srand(time(nullptr));
   static_assert(sizeof(list)==sizeof(void*), "must be 8bytes");
   pgsz = getpagesize();
@@ -141,6 +144,8 @@ int main() {
 					 0));
   assert(reinterpret_cast<void*>(-1) != rawb);
 
+  gethostname(hostname,sizeof(hostname));
+  
   size_t len = 1UL<<26;
   size_t *arr = nullptr;
   list *nodes = nullptr;
@@ -161,6 +166,10 @@ int main() {
   head = &nodes[arr[0]];
   mid = &nodes[arr[len/2]];
   free(arr);  
+
+  std::string out_name = std::string(hostname) + std::string(".txt");
+  
+  std::ofstream out(out_name.c_str());
   
   for(int num_nops=1; num_nops < 300; num_nops++) {
     double avg = 0.0, error = 0.0;
@@ -175,7 +184,9 @@ int main() {
     }
     while(error > 0.01 /*or tries < 16*/);
     std::cout << num_nops << " insns, " << avg << " cycles\n";
+    out << num_nops << " insns, " << avg << " cycles\n";
   }
+  out.close();
 
   munmap(rawb, pgsz);
   free(nodes);
