@@ -135,7 +135,7 @@ int main() {
   char hostname[256] = {0};
   srand(time(nullptr));
   static_assert(sizeof(list)==sizeof(void*), "must be 8bytes");
-  pgsz = getpagesize();
+  pgsz = 4*getpagesize();
   rawb = reinterpret_cast<uint8_t*>(mmap(NULL,
 					 pgsz,
 					 PROT_READ|PROT_WRITE|PROT_EXEC,
@@ -185,6 +185,7 @@ int main() {
     while(error > 0.01 /*or tries < 16*/);
     std::cout << num_nops << " insns, " << avg << " cycles\n";
     out << num_nops << " insns, " << avg << " cycles\n";
+    out.flush();
   }
   out.close();
 
