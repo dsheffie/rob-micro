@@ -74,11 +74,9 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4) {
     buf[offs++] = 0x8b;
     buf[offs++] = 0x36;
     /* fill with nops */
-#if 0
     for(int i = 0; i < num_nops; i++) {
       buf[offs++] = 0x90;
     }
-#endif
     if(iters == 0) {
       //3 bytes before loop
       int body_sz  = (offs - lloop);
