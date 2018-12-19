@@ -40,9 +40,14 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4) {
     //nop
     WRITE_INSN(0xd503201f);
   }
-  
-  //aa0303e0 mov x0, x3
-  WRITE_INSN(0xaa0303e0);
+  //f1000463 subs x3, x3, #0x1
+  WRITE_INSN(0xf1000463);
+
+  //010x 0100 iiii iiii iiii iiii iiix xxxx  -  b.c ADDR_PCREL19 
+  //54 fd8701 b.ne8 <traverse+0x8>
+    
+  //aa0203e0 mov x0, x2  
+  WRITE_INSN(0xaa0203e0);
   //4:d65f03c0 ret
   WRITE_INSN(0xd65f03c0);
   
