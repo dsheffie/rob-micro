@@ -2,6 +2,7 @@
 #define _codegen_aarch64_
 
 ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4) {
+  unroll = 1;
   int offs = 0;
   union u32{
     uint32_t u32;
@@ -44,8 +45,26 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4) {
   WRITE_INSN(0xf1000463);
 
   //010x 0100 iiii iiii iiii iiii iiix xxxx  -  b.c ADDR_PCREL19 
-  //54 fd8701 b.ne8 <traverse+0x8>
-    
+  union branch {
+    struct br {
+      uint32_t op1 : 5;
+      int32_t disp : 19;
+      uint32_t op0 : 8;
+    };
+    br bits;
+    uint32_t insn;
+    branch(int32_t disp) {
+      bits.op1 = 0x1;
+      bits.op0 = 0x54;
+      bits.disp = disp;
+    }
+  };
+
+  int32_t disp = (target - offs)/4;
+  branch b(disp);
+  WRITE_INSN(b.insn);
+  
+  
   //aa0203e0 mov x0, x2  
   WRITE_INSN(0xaa0203e0);
   //4:d65f03c0 ret
