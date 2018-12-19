@@ -42,6 +42,8 @@ static list* head = nullptr, *mid = nullptr;
 
 #ifdef __amd64__
 #include "codegen_amd64.hh"
+#elif __aarch64__
+#include "codegen_aarch64.hh"
 #else
 #error "wtf is this architecture"
 #endif
