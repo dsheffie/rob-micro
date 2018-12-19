@@ -52,7 +52,9 @@ static list* head = nullptr, *mid = nullptr;
 double avg_time(int num_nops, int64_t iterations) {
 
   ubench_t my_bench = make_code(rawb, pgsz, num_nops, 16);
-  
+  if(my_bench == nullptr) {
+    return 0.0;
+  }
   int64_t c = 0;
   cycle_counter cc;
   cc.enable_counter();
@@ -86,7 +88,7 @@ int main(int argc, char *argv[]) {
 
   gethostname(hostname,sizeof(hostname));
   
-  size_t len = 1UL<<16;
+  size_t len = 1UL<<22;
   size_t *arr = nullptr;
   list *nodes = nullptr;
   int rc = posix_memalign((void**)&arr, 64, len*sizeof(size_t));

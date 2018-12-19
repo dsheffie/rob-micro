@@ -2,7 +2,6 @@
 #define _codegen_aarch64_
 
 ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4) {
-  unroll = 1;
   int offs = 0;
   union u32{
     uint32_t u32;
@@ -27,23 +26,50 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4) {
   WRITE_INSN(0xaa0203e3);
   
   const int target = offs;
-  //f9400000 ldr x0, [x0]
-  WRITE_INSN(0xf9400000);
-
-  for(int n = 0; n < num_nops; n++) {
-    //nop
-    WRITE_INSN(0xd503201f);
-  }
-  //f9400021 ldr x1, [x1]
-  WRITE_INSN(0xf9400021);
+  for(int iters = 0; iters < unroll; iters++) {
+    //f9400000 ldr x0, [x0]
+    WRITE_INSN(0xf9400000);
     
-  for(int n = 0; n < num_nops; n++) {
-    //nop
-    WRITE_INSN(0xd503201f);
+    for(int n = 0; n < num_nops; n++) {
+      //nop
+      WRITE_INSN(0xd503201f);
+    }
+    //f9400021 ldr x1, [x1]
+    WRITE_INSN(0xf9400021);
+    
+    for(int n = 0; n < num_nops; n++) {
+      //nop
+      WRITE_INSN(0xd503201f);
+    }
+    if(iters == 0) {
+      //3 bytes before loop
+      int body_sz  = (offs - target);
+      if( (target + 16 + unroll * body_sz) >= pgsz) {
+	return nullptr;
+      }
+    }
   }
-  //f1000463 subs x3, x3, #0x1
-  WRITE_INSN(0xf1000463);
+  union subs {
+    ///x11x 0001 SSii iiii iiii iinn nnnd dddd
+    struct s {
+      uint32_t d : 5;
+      uint32_t n : 5;
+      uint32_t imm : 12;
+      uint32_t SS : 2;
+      uint32_t op : 8;
+    };
+    s bits;
+    uint32_t insn;
+    subs(uint32_t i) : insn(i) {}
+  };
 
+  //f1001063 sub sx3, x3, #0x4
+  subs s(0xf1001063);
+  s.bits.imm = unroll;
+  
+  WRITE_INSN(s.insn);
+
+  
   //010x 0100 iiii iiii iiii iiii iiix xxxx  -  b.c ADDR_PCREL19 
   union branch {
     struct br {
