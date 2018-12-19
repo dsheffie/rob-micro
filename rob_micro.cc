@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
 
   gethostname(hostname,sizeof(hostname));
   
-  size_t len = 1UL<<26;
+  size_t len = 1UL<<16;
   size_t *arr = nullptr;
   list *nodes = nullptr;
   int rc = posix_memalign((void**)&arr, 64, len*sizeof(size_t));
