@@ -13,8 +13,23 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4) {
     int16_t i16;
     uint8_t bytes[2];
   };
+  struct aarch64_alu_imm_fields {
+    uint32_t d : 5;
+    uint32_t n : 5;
+    uint32_t imm : 12;
+    uint32_t SS : 2;
+    uint32_t op : 8;
+  };
+  union aarch64_alu_imm {
+    ///x11x 0001 SSii iiii iiii iinn nnnd dddd
+    aarch64_alu_imm_fields bits;
+    uint32_t insn;
+    aarch64_alu_imm(uint32_t i) : insn(i) {}
+  };
   
   memset(buf, 0, buflen);
+  
+  //91026063 add x3, x3, #0x98
   
 #define WRITE_INSN(X) {				\
     u32 u;					\
@@ -22,6 +37,23 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4) {
     for(int i = 0; i < 4; i++)			\
       buf[offs++] = u.bytes[i];			\
   }
+  //x4 <- 0
+  WRITE_INSN(0xd2800004);
+  //x5 <- 0
+  WRITE_INSN(0xd2800005);
+  //x6 <- 0 
+  WRITE_INSN(0xd2800006);
+  
+  aarch64_alu_imm a0(0x91026064);
+  aarch64_alu_imm a1(0x91026065);
+  aarch64_alu_imm a2(0x91026066);
+  a0.bits.imm = 1;
+  a0.bits.n = a0.bits.d = 4;
+  a1.bits.imm = 1;
+  a1.bits.n = a1.bits.d = 5;
+  a2.bits.imm = 1;
+  a2.bits.n = a2.bits.d = 6;
+  
   //aa0203e3 mov x3, x2
   WRITE_INSN(0xaa0203e3);
   
@@ -29,17 +61,39 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4) {
   for(int iters = 0; iters < unroll; iters++) {
     //f9400000 ldr x0, [x0]
     WRITE_INSN(0xf9400000);
-    
-    for(int n = 0; n < num_nops; n++) {
+
+    int z = 0;
+    for(int n = 0; n < num_nops; n++, z++) {
       //nop
-      WRITE_INSN(0xd503201f);
+      switch(z % 3)
+	{
+	case 0:
+	  WRITE_INSN(a0.insn);
+	  break;
+	case 1:
+	  WRITE_INSN(a1.insn);
+	  break;
+	case 2:
+	  WRITE_INSN(a2.insn);
+	  break;
+	}
     }
     //f9400021 ldr x1, [x1]
     WRITE_INSN(0xf9400021);
     
-    for(int n = 0; n < num_nops; n++) {
-      //nop
-      WRITE_INSN(0xd503201f);
+    for(int n = 0; n < num_nops; n++, z++) {
+      switch(z % 3)
+	{
+	case 0:
+	  WRITE_INSN(a0.insn);
+	  break;
+	case 1:
+	  WRITE_INSN(a1.insn);
+	  break;
+	case 2:
+	  WRITE_INSN(a2.insn);
+	  break;
+	}
     }
     if(iters == 0) {
       //3 bytes before loop
@@ -49,22 +103,9 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4) {
       }
     }
   }
-  union subs {
-    ///x11x 0001 SSii iiii iiii iinn nnnd dddd
-    struct s {
-      uint32_t d : 5;
-      uint32_t n : 5;
-      uint32_t imm : 12;
-      uint32_t SS : 2;
-      uint32_t op : 8;
-    };
-    s bits;
-    uint32_t insn;
-    subs(uint32_t i) : insn(i) {}
-  };
 
   //f1001063 sub sx3, x3, #0x4
-  subs s(0xf1001063);
+  aarch64_alu_imm s(0xf1001063);
   s.bits.imm = unroll;
   
   WRITE_INSN(s.insn);
