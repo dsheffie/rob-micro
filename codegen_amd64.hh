@@ -52,8 +52,8 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool
       buf[offs++] = 0xf7;
       buf[offs++] = 0x37;
       buf[offs++] = 0x13;
-      buf[offs++] = 0x00;
-      buf[offs++] = 0x00;      
+      buf[offs++] = 0x37;
+      buf[offs++] = 0x13;      
     }
     
     //3:	48 8b 3f             	mov    (%rdi),%rdi
@@ -72,8 +72,8 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool
       buf[offs++] = 0xf6;
       buf[offs++] = 0x37;
       buf[offs++] = 0x13;
-      buf[offs++] = 0x00;
-      buf[offs++] = 0x00;      
+      buf[offs++] = 0x37;
+      buf[offs++] = 0x13;      
     }
     
     //146:	48 8b 36             	mov    (%rsi),%rsi

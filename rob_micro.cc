@@ -116,7 +116,7 @@ int main(int argc, char *argv[]) {
 
   if(xor_ptr) {
     for(size_t i = 0; i < len; i++) {
-      uint64_t p = reinterpret_cast<uint64_t>(nodes[i].next) ^ 0x1337;
+      uint64_t p = reinterpret_cast<uint64_t>(nodes[i].next) ^ 0x13371337;
       nodes[i].next = reinterpret_cast<list*>(p);
     }
   }
