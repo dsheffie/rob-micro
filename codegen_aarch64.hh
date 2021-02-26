@@ -1,8 +1,9 @@
 #ifndef _codegen_aarch64_
 #define _codegen_aarch64_
 
-ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4) {
+ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool xor_ptr = false) {
   int offs = 0;
+  assert(not(xor_ptr));
   union u32{
     uint32_t u32;
     int32_t i32;

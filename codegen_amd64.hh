@@ -23,7 +23,7 @@ static void round_robin_incq(int &offs, uint8_t *buf, int i) {
   buf[offs++] = 0xc0 + (i % 8);
 }
 
-ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4) {
+ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool xor_ptr=false) {
   assert(unroll < 128);
   union {
     int32_t i32;
@@ -45,6 +45,17 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4) {
   const int lloop = offs;
   //0000000000000003 <lloop>:
   for(int iters = 0; iters < unroll; iters++) {
+    if(xor_ptr) {
+      //48 81 f7 37 13 00 00 	xor    $0x1337,%rdi
+      buf[offs++] = 0x48;
+      buf[offs++] = 0x81;
+      buf[offs++] = 0xf7;
+      buf[offs++] = 0x37;
+      buf[offs++] = 0x13;
+      buf[offs++] = 0x00;
+      buf[offs++] = 0x00;      
+    }
+    
     //3:	48 8b 3f             	mov    (%rdi),%rdi
     buf[offs++] = 0x48;
     buf[offs++] = 0x8b;
@@ -54,6 +65,17 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4) {
       round_robin_incq(offs, buf, i);      
       //buf[offs++] = 0x90;
     }
+    if(xor_ptr) {
+      //48 81 f6 37 13 00 00 	xor    $0x1337,%rsi
+      buf[offs++] = 0x48;
+      buf[offs++] = 0x81;
+      buf[offs++] = 0xf6;
+      buf[offs++] = 0x37;
+      buf[offs++] = 0x13;
+      buf[offs++] = 0x00;
+      buf[offs++] = 0x00;      
+    }
+    
     //146:	48 8b 36             	mov    (%rsi),%rsi
     buf[offs++] = 0x48;
     buf[offs++] = 0x8b;
