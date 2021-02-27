@@ -172,7 +172,7 @@ int main(int argc, char *argv[]) {
   
   std::ofstream out(out_name.c_str());
   
-  for(int num_nops=1; num_nops < max_ops; num_nops++) {
+  for(int num_nops=1; num_nops <= max_ops; num_nops++) {
     for(int t = 0; t < tries; ++t) {
        results[t] = avg_time(num_nops,len, xor_ptr);
     }
