@@ -1,4 +1,6 @@
 #include <iostream>
+#include <algorithm>
+#include <vector>
 #include <ostream>
 #include <fstream>
 #include <cstdlib>
@@ -79,14 +81,43 @@ double avg_time(int num_nops, int64_t iterations, bool xor_ptr) {
 
 
 int main(int argc, char *argv[]) {
+  static_assert(sizeof(list)==sizeof(void*), "must be pointer sized");  
   char hostname[256] = {0};
   void *ptr = nullptr;
-  bool xor_ptr = true;
-  ///#ifdef __aarch64__
-  //  xor_ptr = false;
-  //#endif
+  bool xor_ptr = false;
+  size_t len = 1UL<<22;
+  int max_ops = 300;
+  int tries = 8;
+  int c;
+  std::vector<double> results;
   srand(time(nullptr));
-  static_assert(sizeof(list)==sizeof(void*), "must be pointer sized");
+  
+  while ((c = getopt (argc, argv, "l:m:t:x:")) != -1) {
+    switch(c)
+      {
+      case 'l':
+	len = 1UL << (atoi(optarg));
+	break;
+      case 'm':
+	max_ops = atoi(optarg);
+	break;
+      case 't':
+	tries = atoi(optarg);
+	break;
+      case 'x':
+	xor_ptr = (atoi(optarg) != 0);
+      default:
+	break;
+      }
+  }
+  std::cout << "len = " << len
+	    << ", max_ops = " << max_ops
+	    << ", tries = " << tries
+	    << ", xor_ptr = " << xor_ptr
+	    << "\n";
+  results.resize(tries);
+  
+
   pgsz = 32*getpagesize();
   rawb = reinterpret_cast<uint8_t*>(mmap(NULL,
 					 pgsz,
@@ -98,7 +129,7 @@ int main(int argc, char *argv[]) {
 
   gethostname(hostname,sizeof(hostname));
   
-  size_t len = 1UL<<22;
+
   size_t *arr = nullptr;
   list *nodes = nullptr;
 
@@ -141,18 +172,12 @@ int main(int argc, char *argv[]) {
   
   std::ofstream out(out_name.c_str());
   
-  for(int num_nops=1; num_nops < 300; num_nops++) {
-    double avg = 0.0, error = 0.0;
-    int tries = 1;
-    avg = avg_time(num_nops,len, xor_ptr);
-    do {
-      double r = avg_time(num_nops,1L<<16,xor_ptr);
-      avg = ((avg * tries) +  r) / (tries+1);
-      tries++;
-      error = std::abs(avg-r) / avg;
-      //std::cout << "avg = " << avg << ",r = " << r << ", error = " << error << "\n";
+  for(int num_nops=1; num_nops < max_ops; num_nops++) {
+    for(int t = 0; t < tries; ++t) {
+       results[t] = avg_time(num_nops,len, xor_ptr);
     }
-    while(error > 0.01 /*or tries < 16*/);
+    std::sort(results.begin(), results.end());
+    double avg = results[tries/2];
     std::cout << num_nops << " insns, " << avg << " cycles\n";
     out << num_nops << " insns, " << avg << " cycles\n";
     out.flush();
