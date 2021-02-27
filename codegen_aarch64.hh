@@ -3,7 +3,6 @@
 
 ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool xor_ptr = false) {
   int offs = 0;
-  assert(not(xor_ptr));
   union u32{
     uint32_t u32;
     int32_t i32;
@@ -57,9 +56,22 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool
   
   //aa0203e3 mov x3, x2
   WRITE_INSN(0xaa0203e3);
+
+  if(xor_ptr) {
+    //d28266e9 	mov	x9, #0x1337                	// #4919
+    //f2a266e9 	movk	x9, #0x1337, lsl #16
+    WRITE_INSN(0xd28266e9);
+    WRITE_INSN(0xf2a266e9);
+  }
   
   const int target = offs;
   for(int iters = 0; iters < unroll; iters++) {
+    
+    if(xor_ptr) {
+      //ca090000 	eor	x0, x0, x9
+      WRITE_INSN(0xca090000);
+    }
+    
     //f9400000 ldr x0, [x0]
     WRITE_INSN(0xf9400000);
 
@@ -78,6 +90,11 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool
 	  WRITE_INSN(a2.insn);
 	  break;
 	}
+    }
+
+    if(xor_ptr) {
+      //ca050021 	eor	x1, x1, x9
+      WRITE_INSN(0xca090021);
     }
     //f9400021 ldr x1, [x1]
     WRITE_INSN(0xf9400021);

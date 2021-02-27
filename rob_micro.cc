@@ -76,9 +76,9 @@ double avg_time(int num_nops, int64_t iterations, bool xor_ptr) {
 int main(int argc, char *argv[]) {
   char hostname[256] = {0};
   bool xor_ptr = true;
-#ifdef __aarch64__
-  xor_ptr = false;
-#endif
+  ///#ifdef __aarch64__
+  //  xor_ptr = false;
+  //#endif
   srand(time(nullptr));
   static_assert(sizeof(list)==sizeof(void*), "must be pointer sized");
   pgsz = 32*getpagesize();
