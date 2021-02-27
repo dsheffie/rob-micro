@@ -12,6 +12,11 @@
 
 #include "perf.hh"
 
+#define PROT (PROT_READ | PROT_WRITE)
+#define MAP (MAP_ANONYMOUS|MAP_PRIVATE|MAP_POPULATE)
+static const void* failed_mmap = reinterpret_cast<void *>(-1);
+
+
 typedef int64_t (*ubench_t)(void*,void*,int64_t);
 struct list {
   list *next = nullptr;
@@ -75,6 +80,7 @@ double avg_time(int num_nops, int64_t iterations, bool xor_ptr) {
 
 int main(int argc, char *argv[]) {
   char hostname[256] = {0};
+  void *ptr = nullptr;
   bool xor_ptr = true;
   ///#ifdef __aarch64__
   //  xor_ptr = false;
@@ -95,10 +101,20 @@ int main(int argc, char *argv[]) {
   size_t len = 1UL<<22;
   size_t *arr = nullptr;
   list *nodes = nullptr;
+
+  
+  
   int rc = posix_memalign((void**)&arr, 64, len*sizeof(size_t));
   assert(rc == 0);
-  rc = posix_memalign((void**)&nodes, 64, len*sizeof(list));
-  assert(rc == 0);
+  ptr = mmap(nullptr, len*sizeof(list), PROT, MAP|MAP_HUGETLB, -1, 0);
+  if(ptr == failed_mmap) {
+    std::cerr << "unable to use hugepages, trying with "
+	      << getpagesize() << " byte pages\n";
+    ptr = mmap(nullptr, len*sizeof(list), PROT, MAP, -1, 0);
+  }
+  assert(ptr != failed_mmap);
+  nodes = reinterpret_cast<list*>(ptr);
+  
   for(size_t i = 0; i < len; i++) {
     arr[i] = i;
   }
@@ -144,8 +160,7 @@ int main(int argc, char *argv[]) {
   out.close();
 
   munmap(rawb, pgsz);
-  free(nodes);
-
+  munmap(ptr, sizeof(list)*len);  
 
   
   return 0;
