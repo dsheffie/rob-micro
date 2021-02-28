@@ -20,6 +20,19 @@ static const void* failed_mmap = reinterpret_cast<void *>(-1);
 
 
 typedef int64_t (*ubench_t)(void*,void*,int64_t);
+
+struct codegen_opts {
+  enum class filler {nop, add, jmp};  
+  int unroll;
+  bool xor_ptr;
+  filler filler_op;
+  codegen_opts() :
+    unroll(16),
+    xor_ptr(false),
+    filler_op(filler::nop)
+  {}
+};
+
 struct list {
   list *next = nullptr;
 };
@@ -56,9 +69,9 @@ static list* head = nullptr, *mid = nullptr;
 #endif
 
 
-double avg_time(int num_nops, int64_t iterations, bool xor_ptr) {
+double avg_time(int num_nops, int64_t iterations, codegen_opts &opts) {
 
-  ubench_t my_bench = make_code(rawb, pgsz, num_nops, 16, xor_ptr);
+  ubench_t my_bench = make_code(rawb, pgsz, num_nops, opts);
   if(my_bench == nullptr) {
     return 0.0;
   }
@@ -89,6 +102,7 @@ int main(int argc, char *argv[]) {
   int max_ops = 300;
   int tries = 8;
   int c;
+  codegen_opts opts;
   std::vector<double> results;
   srand(time(nullptr));
   
@@ -115,6 +129,7 @@ int main(int argc, char *argv[]) {
 	    << ", tries = " << tries
 	    << ", xor_ptr = " << xor_ptr
 	    << "\n";
+  opts.xor_ptr = xor_ptr;
   results.resize(tries);
   
 
@@ -174,7 +189,7 @@ int main(int argc, char *argv[]) {
   
   for(int num_nops=1; num_nops <= max_ops; num_nops++) {
     for(int t = 0; t < tries; ++t) {
-       results[t] = avg_time(num_nops,len, xor_ptr);
+       results[t] = avg_time(num_nops,len, opts);
     }
     std::sort(results.begin(), results.end());
     double avg = results[tries/2];
