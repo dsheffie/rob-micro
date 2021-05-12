@@ -1,7 +1,7 @@
 #ifndef _codegen_aarch64_
 #define _codegen_aarch64_
 
-ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool xor_ptr = false) {
+ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool xor_ptr = false, bool use_nops = true) {
   int offs = 0;
   union u32{
     uint32_t u32;
@@ -78,18 +78,23 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool
     int z = 0;
     for(int n = 0; n < num_nops; n++, z++) {
       //nop
-      switch(z % 3)
-	{
-	case 0:
-	  WRITE_INSN(a0.insn);
-	  break;
-	case 1:
-	  WRITE_INSN(a1.insn);
-	  break;
-	case 2:
-	  WRITE_INSN(a2.insn);
-	  break;
-	}
+      if(use_nops) {
+	WRITE_INSN(0xd503201f);
+      }
+      else {
+	switch(z % 3)
+	  {
+	  case 0:
+	    WRITE_INSN(a0.insn);
+	    break;
+	  case 1:
+	    WRITE_INSN(a1.insn);
+	    break;
+	  case 2:
+	    WRITE_INSN(a2.insn);
+	    break;
+	  }
+      }
     }
 
     if(xor_ptr) {
@@ -100,18 +105,23 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool
     WRITE_INSN(0xf9400021);
     
     for(int n = 0; n < num_nops; n++, z++) {
-      switch(z % 3)
-	{
-	case 0:
-	  WRITE_INSN(a0.insn);
-	  break;
-	case 1:
-	  WRITE_INSN(a1.insn);
-	  break;
-	case 2:
-	  WRITE_INSN(a2.insn);
-	  break;
-	}
+      if(use_nops) {
+	WRITE_INSN(0xd503201f);	
+      }
+      else {
+	switch(z % 3)
+	  {
+	  case 0:
+	    WRITE_INSN(a0.insn);
+	    break;
+	  case 1:
+	    WRITE_INSN(a1.insn);
+	    break;
+	  case 2:
+	    WRITE_INSN(a2.insn);
+	    break;
+	  }
+      }      
     }
     if(iters == 0) {
       //3 bytes before loop

@@ -23,7 +23,7 @@ static void round_robin_incq(int &offs, uint8_t *buf, int i) {
   buf[offs++] = 0xc0 + (i % 8);
 }
 
-ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool xor_ptr=false) {
+ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool xor_ptr=false, bool use_nops = true) {
   assert(unroll < 128);
   union {
     int32_t i32;

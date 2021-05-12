@@ -56,9 +56,9 @@ static list* head = nullptr, *mid = nullptr;
 #endif
 
 
-double avg_time(int num_nops, int64_t iterations, bool xor_ptr) {
+double avg_time(int num_nops, int64_t iterations, bool xor_ptr, bool use_nops) {
 
-  ubench_t my_bench = make_code(rawb, pgsz, num_nops, 16, xor_ptr);
+  ubench_t my_bench = make_code(rawb, pgsz, num_nops, 16, xor_ptr, use_nops);
   if(my_bench == nullptr) {
     return 0.0;
   }
@@ -75,7 +75,6 @@ double avg_time(int num_nops, int64_t iterations, bool xor_ptr) {
   double links = static_cast<double>(c);
   
   double avg_cycles = (stop-start)/links;
-
   return avg_cycles;
 }
 
@@ -85,6 +84,7 @@ int main(int argc, char *argv[]) {
   char hostname[256] = {0};
   void *ptr = nullptr;
   bool xor_ptr = false;
+  bool use_nops = true;
   size_t len = 1UL<<22;
   int max_ops = 300;
   int tries = 8;
@@ -92,11 +92,14 @@ int main(int argc, char *argv[]) {
   std::vector<double> results;
   srand(time(nullptr));
   
-  while ((c = getopt (argc, argv, "l:m:t:x:")) != -1) {
+  while ((c = getopt (argc, argv, "l:m:n:t:x:")) != -1) {
     switch(c)
       {
       case 'l':
 	len = 1UL << (atoi(optarg));
+	break;
+      case 'n':
+	use_nops = (atoi(optarg) != 0);
 	break;
       case 'm':
 	max_ops = atoi(optarg);
@@ -114,6 +117,7 @@ int main(int argc, char *argv[]) {
 	    << ", max_ops = " << max_ops
 	    << ", tries = " << tries
 	    << ", xor_ptr = " << xor_ptr
+	    << ", use_nops = " << use_nops    
 	    << "\n";
   results.resize(tries);
   
@@ -174,7 +178,7 @@ int main(int argc, char *argv[]) {
   
   for(int num_nops=1; num_nops <= max_ops; num_nops++) {
     for(int t = 0; t < tries; ++t) {
-       results[t] = avg_time(num_nops,len, xor_ptr);
+      results[t] = avg_time(num_nops,len, xor_ptr, use_nops);
     }
     std::sort(results.begin(), results.end());
     double avg = results[tries/2];
