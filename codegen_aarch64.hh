@@ -1,7 +1,8 @@
 #ifndef _codegen_aarch64_
 #define _codegen_aarch64_
 
-ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool xor_ptr = false, bool use_nops = true) {
+
+ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, codegen_opts &opt) {
   int offs = 0;
   union u32{
     uint32_t u32;
@@ -57,7 +58,7 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool
   //aa0203e3 mov x3, x2
   WRITE_INSN(0xaa0203e3);
 
-  if(xor_ptr) {
+  if(opt.xor_ptr) {
     //d28266e9 	mov	x9, #0x1337                	// #4919
     //f2a266e9 	movk	x9, #0x1337, lsl #16
     WRITE_INSN(0xd28266e9);
@@ -65,9 +66,9 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool
   }
   
   const int target = offs;
-  for(int iters = 0; iters < unroll; iters++) {
+  for(int iters = 0; iters < opt.unroll; iters++) {
     
-    if(xor_ptr) {
+    if(opt.xor_ptr) {
       //ca090000 	eor	x0, x0, x9
       WRITE_INSN(0xca090000);
     }
@@ -78,55 +79,68 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool
     int z = 0;
     for(int n = 0; n < num_nops; n++, z++) {
       //nop
-      if(use_nops) {
-	WRITE_INSN(0xd503201f);
-      }
-      else {
-	switch(z % 3)
-	  {
-	  case 0:
-	    WRITE_INSN(a0.insn);
-	    break;
-	  case 1:
-	    WRITE_INSN(a1.insn);
-	    break;
-	  case 2:
-	    WRITE_INSN(a2.insn);
-	    break;
-	  }
-      }
+      switch(opt.filler_op)
+	{
+	case codegen_opts::filler::nop:
+	  WRITE_INSN(0xd503201f);
+	  break;
+	case codegen_opts::filler::add:
+	  switch(z % 3)
+	    {
+	    case 0:
+	      WRITE_INSN(a0.insn);
+	      break;
+	    case 1:
+	      WRITE_INSN(a1.insn);
+	      break;
+	    case 2:
+	      WRITE_INSN(a2.insn);
+	      break;
+	    }
+	  break;
+	case codegen_opts::filler::jmp:
+	default:
+	  assert(0);
+	}
     }
 
-    if(xor_ptr) {
+    if(opt.xor_ptr) {
       //ca050021 	eor	x1, x1, x9
       WRITE_INSN(0xca090021);
     }
     //f9400021 ldr x1, [x1]
     WRITE_INSN(0xf9400021);
-    
+
     for(int n = 0; n < num_nops; n++, z++) {
-      if(use_nops) {
-	WRITE_INSN(0xd503201f);	
-      }
-      else {
-	switch(z % 3)
-	  {
-	  case 0:
-	    WRITE_INSN(a0.insn);
-	    break;
-	  case 1:
-	    WRITE_INSN(a1.insn);
-	    break;
-	  case 2:
-	    WRITE_INSN(a2.insn);
-	    break;
-	  }
-      }      
+      //nop
+      switch(opt.filler_op)
+	{
+	case codegen_opts::filler::nop:
+	  WRITE_INSN(0xd503201f);
+	  break;
+	case codegen_opts::filler::add:
+	  switch(z % 3)
+	    {
+	    case 0:
+	      WRITE_INSN(a0.insn);
+	      break;
+	    case 1:
+	      WRITE_INSN(a1.insn);
+	      break;
+	    case 2:
+	      WRITE_INSN(a2.insn);
+	      break;
+	    }
+	  break;
+	case codegen_opts::filler::jmp:
+	default:
+	  assert(0);
+	}
     }
     if(iters == 0) {
       //3 bytes before loop
       int body_sz  = (offs - target);
-      if( (target + 16 + unroll * body_sz) >= pgsz) {
+      if( (target + 16 + opt.unroll * body_sz) >= pgsz) {
 	return nullptr;
       }
     }
@@ -134,7 +148,7 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool
 
   //f1001063 sub sx3, x3, #0x4
   aarch64_alu_imm s(0xf1001063);
-  s.bits.imm = unroll;
+  s.bits.imm = opt.unroll;
   
   WRITE_INSN(s.insn);
 
@@ -169,7 +183,7 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool
   u16 xx;
   buf[offs++] = 0x24;
   buf[offs++] = 0xc6;
-  xx.i16 = -unroll;
+  xx.i16 = -opt.unroll;
   buf[offs++] = xx.bytes[0];
   buf[offs++] = xx.bytes[1];
     
