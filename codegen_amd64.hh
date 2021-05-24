@@ -23,10 +23,6 @@ static void round_robin_incq(int &offs, uint8_t *buf, int i) {
   buf[offs++] = 0xc0 + (i % 8);
 }
 
-<<<<<<< HEAD
-ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, int unroll=4, bool xor_ptr=false, bool use_nops = true) {
-  assert(unroll < 128);
-=======
 static void nop(int &offs, uint8_t *buf) {
   buf[offs++] = 0x90;
 }
@@ -36,10 +32,12 @@ static void jmp_next(int &offs, uint8_t *buf) {
 }
 
 
+
+
 ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops,
 		   const codegen_opts &opt) {  
   assert(opt.unroll < 128);
->>>>>>> c496e7de0be742f09c7ea1b3b2ca0e950d9682b9
+
   union {
     int32_t i32;
     uint8_t bytes[4];
