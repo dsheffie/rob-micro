@@ -1,4 +1,4 @@
-OBJ = rob_micro.o
+OBJ = rob_micro.o m1cycles.o
 CXX = g++
 EXE = rob_micro
 OPT = -O2

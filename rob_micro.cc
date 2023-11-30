@@ -16,7 +16,9 @@
 
 #ifdef __APPLE__
 #define MAP_HUGETLB 0
-#define MAP_POPULATE (MAP_JIT) 
+#define MAP_POPULATE 0
+#else
+#define MAP_JIT 0
 #endif
 
 #define PROT (PROT_READ | PROT_WRITE)
@@ -148,7 +150,7 @@ int main(int argc, char *argv[]) {
   rawb = reinterpret_cast<uint8_t*>(mmap(NULL,
 					 pgsz,
 					 PROT_READ|PROT_WRITE|PROT_EXEC,
-					 MAP_ANON|MAP_PRIVATE,
+					 MAP_ANON|MAP_PRIVATE|MAP_JIT,
 					 -1,
 					 0));
   assert(reinterpret_cast<void*>(-1) != rawb);

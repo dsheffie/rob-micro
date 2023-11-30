@@ -78,13 +78,16 @@ public:
 #endif
 
 #elif __APPLE__
+/* shamelessly stolen from https://lemire.me/blog/2021/03/24/counting-cycles-and-instructions-on-the-apple-m1-processor/
+ */
+#include "m1cycles.hh"
 
 class cycle_counter {
 private:
-  int fd;
+
 public:
-  cycle_counter() : fd(-1) {
-  
+  cycle_counter() {
+    setup_performance_counters();
   }
   ~cycle_counter() {
   }
@@ -95,8 +98,8 @@ public:
   void disable_counter() {
   }
   uint64_t read_counter() {
-    uint64_t count = 0;
-    return count;
+    performance_counters c = get_counters();
+    return static_cast<uint64_t>(c.cycles);
   }
 };
 
