@@ -1,6 +1,9 @@
 #ifndef _codegen_aarch64_
 #define _codegen_aarch64_
 
+#ifdef __APPLE__
+#include <libkern/OSCacheControl.h>
+#endif
 
 ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, codegen_opts &opt) {
   int offs = 0;
@@ -27,7 +30,11 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, codegen_opts &opt)
     uint32_t insn;
     aarch64_alu_imm(uint32_t i) : insn(i) {}
   };
-  
+
+#ifdef __APPLE__
+  pthread_jit_write_protect_np(false);
+#endif
+			       
   memset(buf, 0, buflen);
   
   //91026063 add x3, x3, #0x98
@@ -203,7 +210,12 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, codegen_opts &opt)
   WRITE_INSN(0xd65f03c0);
 
   assert(offs < buflen);
+#ifdef __linux
   __builtin___clear_cache(buf, buf+buflen);
+#elif __APPLE__
+  pthread_jit_write_protect_np(true);
+  sys_icache_invalidate(buf,buflen);
+#endif
   return reinterpret_cast<ubench_t>(buf);
 }
 

@@ -5,6 +5,7 @@
 #define _GNU_SOURCE
 #endif
 
+#ifdef __linux
 
 #ifdef __amd64__
 class cycle_counter {
@@ -75,4 +76,30 @@ public:
 
 };
 #endif
+
+#elif __APPLE__
+
+class cycle_counter {
+private:
+  int fd;
+public:
+  cycle_counter() : fd(-1) {
+  
+  }
+  ~cycle_counter() {
+  }
+  void reset_counter() {
+  }
+  void enable_counter() {
+  }
+  void disable_counter() {
+  }
+  uint64_t read_counter() {
+    uint64_t count = 0;
+    return count;
+  }
+};
+
+#endif
+
 #endif

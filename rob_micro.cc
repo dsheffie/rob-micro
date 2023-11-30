@@ -14,6 +14,11 @@
 
 #include "perf.hh"
 
+#ifdef __APPLE__
+#define MAP_HUGETLB 0
+#define MAP_POPULATE (MAP_JIT) 
+#endif
+
 #define PROT (PROT_READ | PROT_WRITE)
 #define MAP (MAP_ANONYMOUS|MAP_PRIVATE|MAP_POPULATE)
 static const void* failed_mmap = reinterpret_cast<void *>(-1);
