@@ -27,14 +27,17 @@
 static const void* failed_mmap = reinterpret_cast<void *>(-1);
 
 
-typedef int64_t (*ubench_t)(void*,void*,int64_t);
+//(chain a, chain b, iterations, xor key)
+typedef int64_t (*ubench_t)(void*,void*,int64_t,uint64_t);
 
 struct codegen_opts {
-  enum class filler {nop, add, jmp, fp, cmp, intfp, all};  
+  enum class filler {nop, add, jmp, fp, cmp, intfp, all, raw};  
   int unroll;
   int depth;
   bool xor_ptr;
   filler filler_op;
+  //-f raw:<hex>[,<hex>...] : arbitrary instruction words, used round robin
+  std::vector<uint32_t> raw;
   codegen_opts() :
     unroll(16),
     depth(1),
@@ -69,10 +72,10 @@ void shuffle(T *arr, size_t len) {
 #ifdef __aarch64__
 // flip high bits too so stored values don't look like pointers to
 // apple's data-memory-dependent prefetcher
-static const uint64_t xor_key = 0x5a5aa5a55a5aa5a5UL;
+static uint64_t xor_key = 0x5a5aa5a55a5aa5a5UL;
 #else
 // x86 codegen uses a sign-extended imm32 xor
-static const uint64_t xor_key = 0x13371337UL;
+static uint64_t xor_key = 0x13371337UL;
 #endif
 
 static uint8_t *rawb = nullptr;
@@ -82,6 +85,21 @@ static list* head = nullptr, *mid = nullptr;
 static bool random_start = false;
 static list *g_nodes = nullptr;
 static size_t g_len = 0;
+// pick a new xor key (and re-encode the list) before every try
+static bool rotate_key = false;
+
+static void rekey_list() {
+  uint64_t k = (static_cast<uint64_t>(rand()) << 33) ^
+    (static_cast<uint64_t>(rand()) << 11) ^ static_cast<uint64_t>(rand());
+  //keep high bits set so stored values never look like pointers
+  k |= 1UL << 62;
+  uint64_t delta = xor_key ^ k;
+  for(size_t i = 0; i < g_len; i++) {
+    uint64_t p = reinterpret_cast<uint64_t>(g_nodes[i].next) ^ delta;
+    g_nodes[i].next = reinterpret_cast<list*>(p);
+  }
+  xor_key = k;
+}
 
 #ifdef __amd64__
 #include "codegen_amd64.hh"
@@ -115,7 +133,9 @@ static bool wall_clock = false;
 static bool verbose = false;
 
 double avg_time(int num_nops, int64_t iterations, codegen_opts &opts) {
-
+  if(rotate_key) {
+    rekey_list();
+  }
   ubench_t my_bench = make_code(rawb, pgsz, num_nops, opts);
   if(my_bench == nullptr) {
     return 0.0;
@@ -131,7 +151,7 @@ double avg_time(int num_nops, int64_t iterations, codegen_opts &opts) {
     double t0 = timestamp();
     c = my_bench(reinterpret_cast<void*>(head->next),
 		 reinterpret_cast<void*>(mid->next),
-		 iterations);
+		 iterations, xor_key);
     double t1 = timestamp();
     last_cpu1 = current_cpu();
     last_ghz = 0.0;
@@ -146,7 +166,7 @@ double avg_time(int num_nops, int64_t iterations, codegen_opts &opts) {
   uint64_t start = cc.read_counter();
   c = my_bench(reinterpret_cast<void*>(head->next),
 	       reinterpret_cast<void*>(mid->next),
-	       iterations);  
+	       iterations, xor_key);
   uint64_t stop = cc.read_counter();
   double t1 = timestamp();
   last_cpu1 = current_cpu();
@@ -167,6 +187,7 @@ int main(int argc, char *argv[]) {
   std::string filler_name;
   size_t len = 1UL<<22;
   int64_t iters = -1;
+  double warmup = 0.0;
   int min_ops = 1;
   int max_ops = 300;
   int step = 1;
@@ -177,7 +198,7 @@ int main(int argc, char *argv[]) {
   std::vector<double> results;
   srand(time(nullptr));
   
-  while ((c = getopt (argc, argv, "b:c:d:ef:i:l:m:n:q:rs:t:u:vwx:")) != -1) {
+  while ((c = getopt (argc, argv, "b:c:d:ef:i:kl:m:n:q:rs:t:u:vwW:x:")) != -1) {
     switch(c)
       {
       case 'b':
@@ -193,11 +214,22 @@ int main(int argc, char *argv[]) {
 	  return -1;
 	}
 	break;
+      case 'k':
+#ifdef __aarch64__
+	rotate_key = true;
+#else
+	std::cerr << "-k needs a 64-bit key (aarch64 only)\n";
+	return -1;
+#endif
+	break;
       case 'r':
 	random_start = true;
 	break;
       case 'v':
 	verbose = true;
+	break;
+      case 'W':
+	warmup = atof(optarg);
 	break;
       case 'w':
 	wall_clock = true;
@@ -270,13 +302,34 @@ int main(int argc, char *argv[]) {
 	    << ", tries = " << tries
 	    << ", cpus = " << cpu_lo << ":" << cpu_hi
 	    << ", timer = " << (wall_clock ? "wall (ns)" : "cycles")
+	    << ", warmup = " << warmup
 	    << ", random_start = " << random_start
+	    << ", rotate_key = " << rotate_key
 	    << ", xor_ptr = " << xor_ptr
 	    << ", use_nops = " << use_nops    
 	    << "\n";
   opts.xor_ptr = xor_ptr;
+  if(rotate_key and not(xor_ptr)) {
+    std::cerr << "-k needs -x 1\n";
+    return -1;
+  }
   opts.filler_op = use_nops ? codegen_opts::filler::nop : codegen_opts::filler::add;
-  if(not(filler_name.empty())) {
+  if(filler_name.compare(0, 4, "raw:") == 0) {
+    std::string list = filler_name.substr(4);
+    size_t pos = 0;
+    while(pos < list.size()) {
+      size_t e = list.find(',', pos);
+      if(e == std::string::npos) e = list.size();
+      opts.raw.push_back(static_cast<uint32_t>(strtoul(list.substr(pos, e-pos).c_str(), nullptr, 16)));
+      pos = e + 1;
+    }
+    if(opts.raw.empty()) {
+      std::cerr << "raw filler needs at least one instruction word\n";
+      return -1;
+    }
+    opts.filler_op = codegen_opts::filler::raw;
+  }
+  else if(not(filler_name.empty())) {
     static const std::pair<const char*, codegen_opts::filler> fillers[] = {
       {"nop", codegen_opts::filler::nop},
       {"add", codegen_opts::filler::add},
@@ -284,6 +337,7 @@ int main(int argc, char *argv[]) {
       {"cmp", codegen_opts::filler::cmp},
       {"intfp", codegen_opts::filler::intfp},
       {"all", codegen_opts::filler::all},
+      {"jmp", codegen_opts::filler::jmp},
     };
     bool found = false;
     for(const auto &f : fillers) {
@@ -294,7 +348,7 @@ int main(int argc, char *argv[]) {
     }
     if(not(found)) {
       std::cerr << "unknown filler " << filler_name
-		<< " (nop, add, fp, cmp, intfp, all)\n";
+		<< " (nop, add, fp, cmp, intfp, all, jmp)\n";
       return -1;
     }
   }
@@ -361,6 +415,17 @@ int main(int argc, char *argv[]) {
   std::ofstream out(out_name.c_str());
   
   std::vector<double> ghz(tries);
+  if(warmup > 0.0) {
+    //run (and discard) the first data point for a while after building
+    //the list, so whatever reacts to the setup traffic settles first
+    double t_end = timestamp() + warmup;
+    int n = 0;
+    while(timestamp() < t_end) {
+      avg_time(min_ops, iters, opts);
+      n++;
+    }
+    std::cout << "warmup: " << n << " runs over " << warmup << " s\n";
+  }
   for(int num_nops=min_ops; num_nops <= max_ops; num_nops += step) {
     for(int t = 0; t < tries; ++t) {
       for(int attempt = 0; ; attempt++) {

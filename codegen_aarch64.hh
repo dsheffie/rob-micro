@@ -63,16 +63,12 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, codegen_opts &opt)
   a2.bits.n = a2.bits.d = 6;
   const uint32_t adds[3] = {a0.insn, a1.insn, a2.insn};
   
+  //xor key arrives as the 4th argument (x3); grab it before x3
+  //becomes the loop counter
+  //aa0303e9 mov x9, x3
+  WRITE_INSN(0xaa0303e9);
   //aa0203e3 mov x3, x2
   WRITE_INSN(0xaa0203e3);
-
-  if(opt.xor_ptr) {
-    //x9 <- xor_key : movz x9, #k0 ; movk x9, #k1..k3, lsl #16/32/48
-    WRITE_INSN(0xd2800009 | (((xor_key >>  0) & 0xffff) << 5));
-    WRITE_INSN(0xf2a00009 | (((xor_key >> 16) & 0xffff) << 5));
-    WRITE_INSN(0xf2c00009 | (((xor_key >> 32) & 0xffff) << 5));
-    WRITE_INSN(0xf2e00009 | (((xor_key >> 48) & 0xffff) << 5));
-  }
   
   //fadd d4..d7, d16, d17 : independent fp ops, rotate destinations
   auto fadd = [](int z) -> uint32_t {
@@ -118,6 +114,12 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, codegen_opts &opt)
 	  }
 	break;
       case codegen_opts::filler::jmp:
+	//14000001 b .+4 : taken branch to the next instruction
+	WRITE_INSN(0x14000001);
+	break;
+      case codegen_opts::filler::raw:
+	WRITE_INSN(opt.raw[z % opt.raw.size()]);
+	break;
       default:
 	assert(0);
       }
