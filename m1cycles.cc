@@ -118,21 +118,17 @@ static void init_rdtsc() {
     printf("wrong fixed config count\n");
     return;
   }
-  g_config[0] = CPMU_CORE_CYCLE | CFGWORD_EL0A64EN_MASK;
-  g_config[3] = CPMU_INST_BRANCH | CFGWORD_EL0A64EN_MASK;
-  g_config[4] = CPMU_SYNC_BR_ANY_MISP | CFGWORD_EL0A64EN_MASK;
-  g_config[5] = CPMU_INST_A64 | CFGWORD_EL0A64EN_MASK;
+  // configurable event encodings changed after M1 (kpc_set_config rejects
+  // them on newer parts), so only use the fixed counters: cycles and
+  // retired instructions. leave g_config zeroed.
 
   configure_rdtsc();
 }
 
+int thread_qos = QOS_CLASS_USER_INTERACTIVE;
+
 void setup_performance_counters(void) {
-  int test_high_perf_cores = 1;
-  if (test_high_perf_cores) {
-    pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
-  } else {
-    pthread_set_qos_class_self_np(QOS_CLASS_BACKGROUND, 0);
-  }
+  pthread_set_qos_class_self_np(static_cast<qos_class_t>(thread_qos), 0);
   init_rdtsc();
   configure_rdtsc();
 }
@@ -146,10 +142,9 @@ extern performance_counters get_counters(void) {
     }
     return 1;
   }
-  // g_counters[3 + 2] gives you the number of instructions 'decoded'
-  // whereas g_counters[1] might give you the number of instructions 'retired'.
-  return performance_counters{g_counters[0 + 2], g_counters[3 + 2],
-                              g_counters[4 + 2], g_counters[5 + 2]};
+  // fixed counters: [0] = core cycles, [1] = retired instructions
+  return performance_counters{g_counters[0], uint64_t(0), uint64_t(0),
+                              g_counters[1]};
 }
 
 #endif

@@ -61,88 +61,97 @@ ubench_t make_code(uint8_t* buf, size_t buflen, int num_nops, codegen_opts &opt)
   a1.bits.n = a1.bits.d = 5;
   a2.bits.imm = 1;
   a2.bits.n = a2.bits.d = 6;
+  const uint32_t adds[3] = {a0.insn, a1.insn, a2.insn};
   
   //aa0203e3 mov x3, x2
   WRITE_INSN(0xaa0203e3);
 
   if(opt.xor_ptr) {
-    //d28266e9 	mov	x9, #0x1337                	// #4919
-    //f2a266e9 	movk	x9, #0x1337, lsl #16
-    WRITE_INSN(0xd28266e9);
-    WRITE_INSN(0xf2a266e9);
+    //x9 <- xor_key : movz x9, #k0 ; movk x9, #k1..k3, lsl #16/32/48
+    WRITE_INSN(0xd2800009 | (((xor_key >>  0) & 0xffff) << 5));
+    WRITE_INSN(0xf2a00009 | (((xor_key >> 16) & 0xffff) << 5));
+    WRITE_INSN(0xf2c00009 | (((xor_key >> 32) & 0xffff) << 5));
+    WRITE_INSN(0xf2e00009 | (((xor_key >> 48) & 0xffff) << 5));
   }
+  
+  //fadd d4..d7, d16, d17 : independent fp ops, rotate destinations
+  auto fadd = [](int z) -> uint32_t {
+    return 0x1e712a00 | (4 + (z % 4));
+  };
+  //f100049f cmp x4, #1 : only writes flags
+  const uint32_t cmp = 0xf100049f;
+  auto emit_filler = [&](int z) {
+    switch(opt.filler_op)
+      {
+      case codegen_opts::filler::nop:
+	WRITE_INSN(0xd503201f);
+	break;
+      case codegen_opts::filler::add:
+	WRITE_INSN(adds[z % 3]);
+	break;
+      case codegen_opts::filler::fp:
+	WRITE_INSN(fadd(z));
+	break;
+      case codegen_opts::filler::cmp:
+	WRITE_INSN(cmp);
+	break;
+      case codegen_opts::filler::intfp:
+	if(z & 1) {
+	  WRITE_INSN(fadd(z>>1));
+	}
+	else {
+	  WRITE_INSN(adds[(z>>1) % 3]);
+	}
+	break;
+      case codegen_opts::filler::all:
+	switch(z % 3)
+	  {
+	  case 0:
+	    WRITE_INSN(adds[(z/3) % 3]);
+	    break;
+	  case 1:
+	    WRITE_INSN(fadd(z/3));
+	    break;
+	  case 2:
+	    WRITE_INSN(cmp);
+	    break;
+	  }
+	break;
+      case codegen_opts::filler::jmp:
+      default:
+	assert(0);
+      }
+  };
   
   const int target = offs;
   for(int iters = 0; iters < opt.unroll; iters++) {
     
-    if(opt.xor_ptr) {
-      //ca090000 	eor	x0, x0, x9
-      WRITE_INSN(0xca090000);
+    //depth dependent misses per chain step
+    for(int d = 0; d < opt.depth; d++) {
+      if(opt.xor_ptr) {
+	//ca090000 	eor	x0, x0, x9
+	WRITE_INSN(0xca090000);
+      }
+      //f9400000 ldr x0, [x0]
+      WRITE_INSN(0xf9400000);
     }
-    
-    //f9400000 ldr x0, [x0]
-    WRITE_INSN(0xf9400000);
 
     int z = 0;
     for(int n = 0; n < num_nops; n++, z++) {
-      //nop
-      switch(opt.filler_op)
-	{
-	case codegen_opts::filler::nop:
-	  WRITE_INSN(0xd503201f);
-	  break;
-	case codegen_opts::filler::add:
-	  switch(z % 3)
-	    {
-	    case 0:
-	      WRITE_INSN(a0.insn);
-	      break;
-	    case 1:
-	      WRITE_INSN(a1.insn);
-	      break;
-	    case 2:
-	      WRITE_INSN(a2.insn);
-	      break;
-	    }
-	  break;
-	case codegen_opts::filler::jmp:
-	default:
-	  assert(0);
-	}
+      emit_filler(z);
     }
 
-    if(opt.xor_ptr) {
-      //ca050021 	eor	x1, x1, x9
-      WRITE_INSN(0xca090021);
+    for(int d = 0; d < opt.depth; d++) {
+      if(opt.xor_ptr) {
+	//ca090021 	eor	x1, x1, x9
+	WRITE_INSN(0xca090021);
+      }
+      //f9400021 ldr x1, [x1]
+      WRITE_INSN(0xf9400021);
     }
-    //f9400021 ldr x1, [x1]
-    WRITE_INSN(0xf9400021);
 
     for(int n = 0; n < num_nops; n++, z++) {
-      //nop
-      switch(opt.filler_op)
-	{
-	case codegen_opts::filler::nop:
-	  WRITE_INSN(0xd503201f);
-	  break;
-	case codegen_opts::filler::add:
-	  switch(z % 3)
-	    {
-	    case 0:
-	      WRITE_INSN(a0.insn);
-	      break;
-	    case 1:
-	      WRITE_INSN(a1.insn);
-	      break;
-	    case 2:
-	      WRITE_INSN(a2.insn);
-	      break;
-	    }
-	  break;
-	case codegen_opts::filler::jmp:
-	default:
-	  assert(0);
-	}
+      emit_filler(z);
     }
     if(iters == 0) {
       //3 bytes before loop

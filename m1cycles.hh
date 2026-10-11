@@ -57,6 +57,10 @@ inline performance_counters operator-(const performance_counters &a,
                               a.instructions - b.instructions);
 }
 
+// qos_class_t for the measuring thread; background keeps it on
+// efficiency cores, user-interactive prefers the fastest cores
+extern int thread_qos;
+
 void setup_performance_counters();
 
 extern performance_counters get_counters();
