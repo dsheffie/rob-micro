@@ -5,6 +5,7 @@
 #define _GNU_SOURCE
 #endif
 
+#include <cstdint>
 
 #ifdef __amd64__
 class cycle_counter {
@@ -29,7 +30,6 @@ public:
 #include <sys/file.h>
 #include <sys/time.h>
 #include <cassert>
-#include <cstdint>
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <linux/unistd.h>

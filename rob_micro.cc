@@ -68,7 +68,42 @@ static list* head = nullptr, *mid = nullptr;
 #error "wtf is this architecture"
 #endif
 
-
+/* size of the last-level data/unified cache seen by cpu0, from sysfs.
+ * returns 0 if sysfs isn't there. sysconf(_SC_LEVEL3_CACHE_SIZE) would
+ * be simpler but glibc gets it from cpuid on x86 and usually returns 0
+ * on aarch64. */
+static size_t llc_bytes() {
+  size_t llc_sz = 0;
+  int llc_lvl = 0;
+  for(int i = 0; ; i++) {
+    std::string dir = "/sys/devices/system/cpu/cpu0/cache/index" + std::to_string(i) + "/";
+    std::ifstream lvl_f(dir + "level"), type_f(dir + "type"), size_f(dir + "size");
+    if(not lvl_f.good()) {
+      break;
+    }
+    int lvl = 0;
+    std::string type;
+    size_t sz = 0;
+    char unit = 0;
+    lvl_f >> lvl;
+    type_f >> type;
+    size_f >> sz >> unit;
+    if(type == "Instruction") {
+      continue;
+    }
+    if(unit == 'K') {
+      sz <<= 10;
+    }
+    else if(unit == 'M') {
+      sz <<= 20;
+    }
+    if(lvl > llc_lvl) {
+      llc_lvl = lvl;
+      llc_sz = sz;
+    }
+  }
+  return llc_sz;
+}
 
 double avg_time(int num_nops, int64_t iterations, codegen_opts &opts) {
 
@@ -99,14 +134,21 @@ int main(int argc, char *argv[]) {
   void *ptr = nullptr;
   bool xor_ptr = false;
   bool use_nops = true;
-  size_t len = 1UL<<22;
+  size_t len = 1UL<<24;
   int max_ops = 300;
   int tries = 8;
   int c;
   codegen_opts opts;
   std::vector<double> results;
   srand(time(nullptr));
-  
+
+  /* the list must blow out the LLC or the loads are cache hits that
+   * don't stall long enough to fill the ROB (zen5: 32MB L3 per CCD
+   * swallowed the old 1<<22 default). use >= 4x LLC, -l overrides. */
+  while(len*sizeof(list) < 4*llc_bytes()) {
+    len <<= 1;
+  }
+
   while ((c = getopt (argc, argv, "l:m:n:t:x:")) != -1) {
     switch(c)
       {
@@ -124,6 +166,7 @@ int main(int argc, char *argv[]) {
 	break;
       case 'x':
 	xor_ptr = (atoi(optarg) != 0);
+	break;
       default:
 	break;
       }
